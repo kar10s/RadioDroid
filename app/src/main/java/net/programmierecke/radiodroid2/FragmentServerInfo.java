@@ -3,14 +3,16 @@ package net.programmierecke.radiodroid2;
 import android.content.Intent;
 import android.os.AsyncTask;
 import android.os.Bundle;
-import androidx.annotation.Nullable;
-import androidx.fragment.app.Fragment;
 import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.ListView;
 import android.widget.Toast;
+
+import androidx.annotation.Nullable;
+import androidx.fragment.app.Fragment;
+import androidx.localbroadcastmanager.content.LocalBroadcastManager;
 
 import net.programmierecke.radiodroid2.adapters.ItemAdapterStatistics;
 import net.programmierecke.radiodroid2.data.DataStatistics;
@@ -39,7 +41,7 @@ public class FragmentServerInfo extends Fragment implements IFragmentRefreshable
     }
 
     void Download(final boolean forceUpdate){
-        getContext().sendBroadcast(new Intent(ActivityMain.ACTION_SHOW_LOADING));
+        LocalBroadcastManager.getInstance(getContext()).sendBroadcast(new Intent(ActivityMain.ACTION_SHOW_LOADING));
 
         RadioDroidApp radioDroidApp = (RadioDroidApp) getActivity().getApplication();
         final OkHttpClient httpClient = radioDroidApp.getHttpClient();
@@ -47,17 +49,13 @@ public class FragmentServerInfo extends Fragment implements IFragmentRefreshable
         new AsyncTask<Void, Void, String>() {
             @Override
             protected String doInBackground(Void... params) {
-                String endpoint = RadioBrowserServerManager.getWebserviceEndpoint(getActivity(),"json/stats");
-                if (endpoint != null) {
-                    return Utils.downloadFeed(httpClient, getActivity(), endpoint, forceUpdate, null);
-                }
-                return null;
+                return Utils.downloadFeedRelative(httpClient, getActivity(), "json/stats", forceUpdate, null);
             }
 
             @Override
             protected void onPostExecute(String result) {
                 if(getContext() != null)
-                    getContext().sendBroadcast(new Intent(ActivityMain.ACTION_HIDE_LOADING));
+                    LocalBroadcastManager.getInstance(getContext()).sendBroadcast(new Intent(ActivityMain.ACTION_HIDE_LOADING));
                 if (result != null) {
                     itemAdapterStatistics.clear();
                     DataStatistics[] items = DataStatistics.DecodeJson(result);

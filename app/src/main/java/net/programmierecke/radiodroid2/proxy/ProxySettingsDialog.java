@@ -5,17 +5,18 @@ import android.content.DialogInterface;
 import android.content.SharedPreferences;
 import android.os.AsyncTask;
 import android.os.Bundle;
-import androidx.annotation.NonNull;
-import androidx.fragment.app.DialogFragment;
-import androidx.appcompat.app.AlertDialog;
-import androidx.preference.PreferenceManager;
-import androidx.appcompat.widget.AppCompatSpinner;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.widget.ArrayAdapter;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.TextView;
+
+import androidx.annotation.NonNull;
+import androidx.appcompat.app.AlertDialog;
+import androidx.appcompat.widget.AppCompatSpinner;
+import androidx.fragment.app.DialogFragment;
+import androidx.preference.PreferenceManager;
 
 import net.programmierecke.radiodroid2.R;
 import net.programmierecke.radiodroid2.RadioDroidApp;
@@ -150,6 +151,7 @@ public class ProxySettingsDialog extends DialogFragment {
 
         private String connectionSuccessStr;
         private String connectionFailedStr;
+        private String connectionInvalidInputStr;
 
         private boolean requestSucceeded = false;
         private String errorStr;
@@ -162,19 +164,26 @@ public class ProxySettingsDialog extends DialogFragment {
 
             connectionSuccessStr = radioDroidApp.getString(R.string.settings_proxy_working, TEST_ADDRESS);
             connectionFailedStr = radioDroidApp.getString(R.string.settings_proxy_not_working);
+            connectionInvalidInputStr = radioDroidApp.getString(R.string.settings_proxy_invalid);
 
-            OkHttpClient.Builder builder = radioDroidApp.newHttpClient()
+            OkHttpClient.Builder builder = radioDroidApp.newHttpClientWithoutProxy()
                     .connectTimeout(10, TimeUnit.SECONDS)
                     .writeTimeout(10, TimeUnit.SECONDS)
                     .readTimeout(10, TimeUnit.SECONDS);
 
-            Utils.setOkHttpProxy(builder, proxySettings);
-            okHttpClient = builder.build();
+            if (!Utils.setOkHttpProxy(builder, proxySettings)){
+                // proxy settings are not valid
+            }else{
+                okHttpClient = builder.build();
+            }
         }
 
         @Override
         protected void onPreExecute() {
             super.onPreExecute();
+
+            if (okHttpClient == null)
+                return;
 
             Request.Builder builder = new Request.Builder().url(TEST_ADDRESS);
             call = okHttpClient.newCall(builder.build());
@@ -182,6 +191,8 @@ public class ProxySettingsDialog extends DialogFragment {
 
         @Override
         protected Void doInBackground(Void... voids) {
+            if (okHttpClient == null)
+                return null;
             try {
                 Response response = call.execute();
                 requestSucceeded = response.isSuccessful();
@@ -205,10 +216,14 @@ public class ProxySettingsDialog extends DialogFragment {
                 return;
             }
 
-            if (requestSucceeded) {
-                textResult.setText(connectionSuccessStr);
+            if (okHttpClient == null){
+                textResult.setText(connectionInvalidInputStr);
             } else {
-                textResult.setText(String.format(connectionFailedStr, TEST_ADDRESS, errorStr));
+                if (requestSucceeded) {
+                    textResult.setText(connectionSuccessStr);
+                } else {
+                    textResult.setText(String.format(connectionFailedStr, TEST_ADDRESS, errorStr));
+                }
             }
         }
     }

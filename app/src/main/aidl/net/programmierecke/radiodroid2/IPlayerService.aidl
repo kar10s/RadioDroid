@@ -1,13 +1,18 @@
 package net.programmierecke.radiodroid2;
 
-import net.programmierecke.radiodroid2.data.StreamLiveInfo;
+import net.programmierecke.radiodroid2.service.PauseReason;
+import net.programmierecke.radiodroid2.station.DataRadioStation;
+import net.programmierecke.radiodroid2.station.live.StreamLiveInfo;
+import net.programmierecke.radiodroid2.station.live.ShoutcastInfo;
+import net.programmierecke.radiodroid2.players.PlayState;
+import net.programmierecke.radiodroid2.players.selector.PlayerType;
 import android.support.v4.media.session.MediaSessionCompat;
 
 interface IPlayerService
 {
-void SaveInfo(String theUrl,String theName,String theID, String theIconUrl);
+void SetStation(in DataRadioStation station);
 void Play(boolean isAlarm);
-void Pause();
+void Pause(in PauseReason pauseReason);
 void Resume();
 void Stop();
 void SkipToNext();
@@ -16,22 +21,24 @@ void addTimer(int secondsAdd);
 void clearTimer();
 long getTimerSeconds();
 String getCurrentStationID();
-String getStationName();
-String getStationIconUrl();
+DataRadioStation getCurrentStation();
 StreamLiveInfo getMetadataLive();
-String getMetadataStreamName();
-String getMetadataServerName();
-String getMetadataGenre();
-String getMetadataHomepage();
-int getMetadataBitrate();
-int getMetadataSampleRate();
-int getMetadataChannels();
+ShoutcastInfo getShoutcastInfo();
 MediaSessionCompat.Token getMediaSessionToken();
 boolean isPlaying();
+PlayState getPlayerState();
 void startRecording();
 void stopRecording();
 boolean isRecording();
 String getCurrentRecordFileName();
 long getTransferredBytes();
+long getBufferedSeconds();
+long getLastPlayStartTime();
 boolean getIsHls();
+PauseReason getPauseReason();
+
+void enableMPD(String hostname, int port);
+void disableMPD();
+
+void warnAboutMeteredConnection(in PlayerType playerType);
 }

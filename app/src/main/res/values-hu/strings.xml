@@ -9,7 +9,6 @@
     <string name="detail_play">Lejátszás</string>
     <string name="detail_pause">Szünet</string>
     <string name="detail_stop">Leállítás</string>
-    <string name="detail_share">Megosztás</string>
 
     <string name="action_local">Helyi</string>
     <string name="action_pause">Szünet</string>
@@ -27,6 +26,9 @@
     <string name="action_tags">Címkék</string>
     <string name="action_countries">Országok</string>
     <string name="action_languages">Nyelvek</string>
+    <string name="action_station_visit_website">Webhely felkeresése</string>
+    <string name="action_station_copy_stream_url">Adatfolyam Url másolása</string>
+    <string name="action_station_share">Megosztás</string>
     <string name="error_station_load">Nem lehet kapcsolódni az állomáshoz</string>
     <string name="error_list_update">Nem lehet kapcsolódni a rádióböngésző kiszolgálóhoz</string>
 
@@ -37,7 +39,7 @@
     <string name="nav_item_history">Előzmények</string>
     <string name="nav_item_settings">Beállítások</string>
     <string name="nav_item_alarm">Riasztások</string>
-    <string name="nav_item_recordings">Rögzítések</string>
+    <string name="tab_player_recordings">Rögzítések</string>
 
     <string name="about_text">Ez az alkalmazás az itt lévő rádióállomás-jegyzéket használja:\nhttps://www.radio-browser.info\Bárki adhat hozzá és szerkesztheti az állomásokat. Úgy működik, mint egy online rádióállomásokról szóló wiki.\n\nKapcsolat:\nsegler_alex@web.de\n\nHibakövető:\nhttps://github.com/segler-alex/RadioDroid/issues\n\nHa tetszik a szoftver, és segíteni szeretne, akkor küldjön nyugodtan e-mailt. Tényleg szükségem van valakira, akinek vannak grafikusi tapasztalati, hogy jobb érzés legyen az appra ránézni :) Talán valaki, aki tud ikonokat és képeket rajzolni… De programozókra is szükség van, akik kijavítják a hibákat, vagy újakat fejlesztenek (funkciókat, nem hibákat ;)\nAz új funkcióötleteket is értékeljük!\n\nEz az app szabad szoftver, és a GPLv3 licenc alatt érhető el.\nhttps://www.gnu.org/licenses/gpl-3.0.html</string>
     <string name="about_version">Verzió: %1$s</string>
@@ -49,7 +51,7 @@
     <string name="sleep_timer_title">Hány perc maradt a leállításig?</string>
     <string name="sleep_timer_apply">Alkalmaz</string>
     <string name="sleep_timer_clear">Törlés</string>
-    <string name="nav_item_add_sleep">+15 perc</string>
+    <string name="nav_item_add_sleep">Alvási időzítő</string>
 
     <string name="nav_item_save_playlist">Mentés lejátzólistára</string>
     <string name="nav_item_load_playlist">Betöltés lejátszólistából</string>
@@ -199,9 +201,6 @@
     <string name="action_mpd_ok">MPD csatlakoztatva</string>
     <string name="action_mpd_connected">Kapcsolódva a kiszolgálóhoz: %1$s</string>
 
-<!--    <string name="settings_radiobrowser_servers">RadioBrowser kiszolgálók</string>-->
-    <string name="settings_radiobrowser_servers_default">www.radio-browser.info/webservice</string>
-
     <string name="settings_other">Egyéb</string>
     <string name="settings_statistics">Statisztika</string>
     <string name="settings_about">Az RadioDroid névjegye</string>
@@ -218,13 +217,6 @@
 
     <string name="notify_stream_url_copied">Adatfolyam Url sikeresen másolva!</string>
 
-    <string-array name="actions_station_link">
-        <item>Webhely felkeresése</item>
-        <item>Adatfolyam Url másolása</item>
-    </string-array>
-
-    <string name="no_wifi_title">Nincs WiFi (WLAN) kapcsolat</string>
-    <string name="no_wifi_connection">Nincs WiFi (WLAN) kapcsolat a(z) %1$s indításakor. Kattintson az \'Ok\' gombra a folytatáshoz.</string>
     <string name="nav_item_statistics">Statisztika</string>
     <string name="nav_item_about">Névjegy</string>
     <string name="settings_mpd_port">MPD port</string>

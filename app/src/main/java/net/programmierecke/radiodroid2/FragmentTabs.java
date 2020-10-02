@@ -3,20 +3,24 @@ package net.programmierecke.radiodroid2;
 import android.content.Context;
 import android.content.res.Resources;
 import android.os.Bundle;
-import androidx.annotation.Nullable;
-import com.google.android.material.tabs.TabLayout;
-import androidx.fragment.app.Fragment;
-import androidx.fragment.app.FragmentManager;
-import androidx.fragment.app.FragmentPagerAdapter;
-import androidx.viewpager.widget.ViewPager;
 import android.telephony.TelephonyManager;
 import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 
+import androidx.annotation.Nullable;
+import androidx.fragment.app.Fragment;
+import androidx.fragment.app.FragmentManager;
+import androidx.fragment.app.FragmentPagerAdapter;
+import androidx.viewpager.widget.ViewPager;
+
+import com.google.android.material.tabs.TabLayout;
+
 import net.programmierecke.radiodroid2.interfaces.IFragmentRefreshable;
 import net.programmierecke.radiodroid2.interfaces.IFragmentSearchable;
+import net.programmierecke.radiodroid2.station.FragmentStations;
+import net.programmierecke.radiodroid2.station.StationsFilter;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -28,15 +32,28 @@ public class FragmentTabs extends Fragment implements IFragmentRefreshable, IFra
     private String itsAdressWWWChangedLately = "json/stations/lastchange/100";
     private String itsAdressWWWCurrentlyHeard = "json/stations/lastclick/100";
     private String itsAdressWWWTags = "json/tags";
-    private String itsAdressWWWCountries = "json/countries";
+    private String itsAdressWWWCountries = "json/countrycodes";
     private String itsAdressWWWLanguages = "json/languages";
 
-    private ViewPager viewPager;
+    // Note: the actual order of tabs is defined
+    // further down when populating the ViewPagerAdapter
+    private static final int IDX_LOCAL = 0;
+    private static final int IDX_TOP_CLICK = 1;
+    private static final int IDX_TOP_VOTE = 2;
+    private static final int IDX_CHANGED_LATELY = 3;
+    private static final int IDX_CURRENTLY_HEARD = 4;
+    private static final int IDX_TAGS = 5;
+    private static final int IDX_COUNTRIES = 6;
+    private static final int IDX_LANGUAGES = 7;
+    private static final int IDX_SEARCH = 8;
 
-    private String searchQuery; // Search may be requested before onCreateView so we should wait
+    public static ViewPager viewPager;
 
-    FragmentBase[] fragments = new FragmentBase[9];
-    String[] adresses = new String[]{
+    private String queuedSearchQuery; // Search may be requested before onCreateView so we should wait
+    private StationsFilter.SearchStyle queuedSearchStyle;
+
+    private Fragment[] fragments = new Fragment[9];
+    private String[] addresses = new String[]{
             itsAdressWWWLocal,
             itsAdressWWWTopClick,
             itsAdressWWWTopVote,
@@ -52,14 +69,16 @@ public class FragmentTabs extends Fragment implements IFragmentRefreshable, IFra
     @Override
     public View onCreateView(LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
         View x = inflater.inflate(R.layout.layout_tabs, null);
-        final TabLayout tabLayout = (TabLayout) x.findViewById(R.id.tabs);
+        final TabLayout tabLayout = getActivity().findViewById(R.id.tabs);
         viewPager = (ViewPager) x.findViewById(R.id.viewpager);
 
         setupViewPager(viewPager);
 
-        if (searchQuery != null) {
-            Search(searchQuery);
-            searchQuery = null;
+        if (queuedSearchQuery != null) {
+            Log.d("TABS", "do queued search by name:"+ queuedSearchQuery);
+            Search(queuedSearchStyle, queuedSearchQuery);
+            queuedSearchQuery = null;
+            queuedSearchStyle = StationsFilter.SearchStyle.ByName;
         }
 
         /*
@@ -79,68 +98,103 @@ public class FragmentTabs extends Fragment implements IFragmentRefreshable, IFra
         return x;
     }
 
+    @Override
+    public void onResume() {
+        super.onResume();
+
+        final TabLayout tabLayout = getActivity().findViewById(R.id.tabs);
+        tabLayout.setVisibility(View.VISIBLE);
+    }
+
+    @Override
+    public void onPause() {
+        super.onPause();
+
+        final TabLayout tabLayout = getActivity().findViewById(R.id.tabs);
+        tabLayout.setVisibility(View.GONE);
+    }
+
     private void setupViewPager(ViewPager viewPager) {
         Context ctx = getContext();
         String countryCode = null;
-        String country = null;
         if (ctx != null) {
             TelephonyManager tm = (TelephonyManager) ctx.getSystemService(Context.TELEPHONY_SERVICE);
             countryCode = tm.getNetworkCountryIso();
             if (countryCode == null) {
                 countryCode = tm.getSimCountryIso();
             }
-            Log.e("YYY", "Found countrycode " + countryCode);
-            country = CountryCodeDictionary.getInstance().getCountryByCode(countryCode);
-            Log.e("YYY", "Found country " + country);
-
-            adresses[0] = "json/stations/bycountryexact/" + country + "?order=clickcount&reverse=true";
+            if (countryCode != null) {
+                if (countryCode.length() == 2) {
+                    Log.d("MAIN", "Found countrycode " + countryCode);
+                    addresses[IDX_LOCAL] = "json/stations/bycountrycodeexact/" + countryCode + "?order=clickcount&reverse=true";
+                }else{
+                    Log.e("MAIN", "countrycode length != 2");
+                }
+            }else{
+                Log.e("MAIN", "device countrycode and sim countrycode are null");
+            }
         }
-        for (int i = 0; i < fragments.length; i++) {
-            if (i < 5)
-                fragments[i] = new FragmentStations();
-            else if (i < 8)
-                fragments[i] = new FragmentCategories();
-            else
-                fragments[i] = new FragmentStations();
-            Bundle bundle1 = new Bundle();
-            bundle1.putString("url", RadioBrowserServerManager.getWebserviceEndpoint(getContext(),adresses[i]));
-            fragments[i].setArguments(bundle1);
+        fragments[IDX_LOCAL] = new FragmentStations();
+        fragments[IDX_TOP_CLICK] = new FragmentStations();
+        fragments[IDX_TOP_VOTE] = new FragmentStations();
+        fragments[IDX_CHANGED_LATELY] = new FragmentStations();
+        fragments[IDX_CURRENTLY_HEARD] = new FragmentStations();
+        fragments[IDX_TAGS] = new FragmentCategories();
+        fragments[IDX_COUNTRIES] = new FragmentCategories();
+        fragments[IDX_LANGUAGES] = new FragmentCategories();
+        fragments[IDX_SEARCH] = new FragmentStations();
+
+        for (int i=0;i<fragments.length;i++) {
+            Bundle bundle = new Bundle();
+            bundle.putString("url", addresses[i]);
+
+            if (i == IDX_SEARCH) {
+                bundle.putBoolean(FragmentStations.KEY_SEARCH_ENABLED, true);
+            }
+
+            fragments[i].setArguments(bundle);
         }
 
-        ((FragmentCategories) fragments[5]).EnableSingleUseFilter(true);
-        ((FragmentCategories) fragments[5]).SetBaseSearchLink("json/stations/bytagexact");
-        ((FragmentCategories) fragments[6]).SetBaseSearchLink("json/stations/bycountryexact");
-        ((FragmentCategories) fragments[7]).SetBaseSearchLink("json/stations/bylanguageexact");
+        ((FragmentCategories) fragments[IDX_TAGS]).EnableSingleUseFilter(true);
+        ((FragmentCategories) fragments[IDX_TAGS]).SetBaseSearchLink(StationsFilter.SearchStyle.ByTagExact);
+        ((FragmentCategories) fragments[IDX_COUNTRIES]).SetBaseSearchLink(StationsFilter.SearchStyle.ByCountryCodeExact);
+        ((FragmentCategories) fragments[IDX_LANGUAGES]).SetBaseSearchLink(StationsFilter.SearchStyle.ByLanguageExact);
 
         FragmentManager m = getChildFragmentManager();
         ViewPagerAdapter adapter = new ViewPagerAdapter(m);
-        if (country != null){
-            adapter.addFragment(fragments[0], R.string.action_local);
+        if (countryCode != null){
+            adapter.addFragment(fragments[IDX_LOCAL], R.string.action_local);
         }
-        adapter.addFragment(fragments[1], R.string.action_top_click);
-        adapter.addFragment(fragments[2], R.string.action_top_vote);
-        adapter.addFragment(fragments[3], R.string.action_changed_lately);
-        adapter.addFragment(fragments[4], R.string.action_currently_playing);
-        adapter.addFragment(fragments[5], R.string.action_tags);
-        adapter.addFragment(fragments[6], R.string.action_countries);
-        adapter.addFragment(fragments[7], R.string.action_languages);
-        adapter.addFragment(fragments[8], R.string.action_search);
+        adapter.addFragment(fragments[IDX_TOP_CLICK], R.string.action_top_click);
+        adapter.addFragment(fragments[IDX_TOP_VOTE], R.string.action_top_vote);
+        adapter.addFragment(fragments[IDX_CHANGED_LATELY], R.string.action_changed_lately);
+        adapter.addFragment(fragments[IDX_CURRENTLY_HEARD], R.string.action_currently_playing);
+        adapter.addFragment(fragments[IDX_TAGS], R.string.action_tags);
+        adapter.addFragment(fragments[IDX_COUNTRIES], R.string.action_countries);
+        adapter.addFragment(fragments[IDX_LANGUAGES], R.string.action_languages);
+        adapter.addFragment(fragments[IDX_SEARCH], R.string.action_search);
         viewPager.setAdapter(adapter);
     }
 
-    public void Search(final String query) {
+    public void Search(StationsFilter.SearchStyle searchStyle, final String query) {
+        Log.d("TABS","Search = "+ query + " searchStyle="+searchStyle);
         if (viewPager != null) {
-            viewPager.setCurrentItem(8, false);
-            fragments[8].SetDownloadUrl(query);
+            Log.d("TABS","a Search = "+ query);
+            viewPager.setCurrentItem(IDX_SEARCH, false);
+            ((IFragmentSearchable)fragments[IDX_SEARCH]).Search(searchStyle, query);
         } else {
-            searchQuery = query;
+            Log.d("TABS","b Search = "+ query);
+            queuedSearchQuery = query;
+            queuedSearchStyle = searchStyle;
         }
     }
 
     @Override
     public void Refresh() {
-        FragmentBase fragment = fragments[viewPager.getCurrentItem()];
-        fragment.DownloadUrl(true);
+        Fragment fragment = fragments[viewPager.getCurrentItem()];
+        if (fragment instanceof FragmentBase) {
+            ((FragmentBase) fragment).DownloadUrl(true);
+        }
     }
 
     class ViewPagerAdapter extends FragmentPagerAdapter {

@@ -1,17 +1,20 @@
 package net.programmierecke.radiodroid2.players;
 
 import android.content.Context;
+
 import androidx.annotation.NonNull;
 
-import net.programmierecke.radiodroid2.data.ShoutcastInfo;
-import net.programmierecke.radiodroid2.data.StreamLiveInfo;
+import net.programmierecke.radiodroid2.station.live.ShoutcastInfo;
+import net.programmierecke.radiodroid2.station.live.StreamLiveInfo;
 import net.programmierecke.radiodroid2.recording.Recordable;
 
 import okhttp3.OkHttpClient;
 
 public interface PlayerWrapper extends Recordable {
     interface PlayListener {
-        void onStateChanged(RadioPlayer.PlayState state);
+        void onStateChanged(PlayState state);
+
+        void onPlayerWarning(final int messageId);
 
         void onPlayerError(final int messageId);
 
@@ -35,6 +38,8 @@ public interface PlayerWrapper extends Recordable {
     long getTotalTransferredBytes();
 
     long getCurrentPlaybackTransferredBytes();
+
+    boolean isLocal();
 
     void setVolume(float newVolume);
 

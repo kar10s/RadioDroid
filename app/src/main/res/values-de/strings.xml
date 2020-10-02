@@ -7,11 +7,11 @@
     <string name="detail_weblink">Weblink</string>
     <string name="detail_play">Abspielen</string>
     <string name="detail_stop">Stoppen</string>
-    <string name="detail_share">Teilen</string>
     <string name="action_search">Suche</string>
     <string name="action_delete">Löschen</string>
     <string name="action_delete_history">Liste bisher gespielter Sender löschen</string>
     <string name="action_delete_favorites">Favoriten löschen</string>
+    <string name="action_delete_stream_history">Trackinformationen löschen</string>
     <string name="action_cancel">Abbrechen</string>
     <string name="action_top_click">Meiste Klicks</string>
     <string name="action_top_vote">Höchste Bewertung</string>
@@ -20,6 +20,9 @@
     <string name="action_tags">Tags</string>
     <string name="action_countries">Länder</string>
     <string name="action_languages">Sprachen</string>
+    <string name="action_station_visit_website">Zur Website gehen</string>
+    <string name="action_station_copy_stream_url">Stream-Url ins Clipboard kopieren</string>
+    <string name="action_station_share">Teilen</string>
     <string name="error_station_load">Es konnte keine Verbindung zur Radiostation hergestellt werden.</string>
     <string name="error_list_update">Die Verbindung zur Stationsliste (Radio-Browser-Server) schlug fehl.</string>
 
@@ -30,7 +33,7 @@
     <string name="nav_item_history">Bisher gespielt</string>
     <string name="nav_item_settings">Einstellungen</string>
     <string name="nav_item_alarm">Wecker</string>
-    <string name="nav_item_recordings">Aufnahmen</string>
+    <string name="tab_player_recordings">Aufnahmen</string>
 
     <string name="about_text">Diese App basiert auf dem freien Internetradio-Stationsverzeichnis https://www.radio-browser.info .\n\nDas Stationsverzeichnis funktioniert nach dem Wiki-Prinzip: jeder, auch Du, kann mithelfen, es aktuell zu halten.\n\nKontakt:\nsegler_alex@web.de\n\nSourcecode und Bugtracker:\nhttps://github.com/segler-alex/RadioDroid/issues\n\nIch freue mich immer über Mails mit Verbesserungsvorschlägen. Falls Du sonst irgendwie helfen willst: es gibt immer Bugs zu fixen :). Wenn Du Dein grafisches Talent einbringen möchtest, wäre ich besonders dankbar, speziell für schönere Icons, Hintergründe oder auch ein insgesamt besseres Design.\n\nDiese App wurde mit der GPLv3 https://www.gnu.org/licenses/gpl-3.0.html lizenziert.</string>
     <string name="detail_star">Als Favorit setzen</string>
@@ -43,8 +46,9 @@
     <string name="sleep_timer_clear">Löschen</string>
     <string name="nav_item_add_sleep">Schlaftimer</string>
 
-    <string name="nav_item_save_playlist">In Playlist speichern</string>
-    <string name="nav_item_load_playlist">Von Playlist laden</string>
+    <string name="nav_item_save_playlist">Favoriten als Playlist exportieren</string>
+    <string name="nav_item_load_playlist">Favoriten von Playlist importieren</string>
+    <string name="nav_item_save_history_playlist">Verlauf als Playlist exportieren</string>
 
     <string name="settings_appearance">Aussehen</string>
     <string name="settings_theme_selection_title">Thema</string>
@@ -62,11 +66,18 @@
     <string name="settings_show_broken_on">Alle Stationen werden angezeigt, auch nicht funktionierende.</string>
     <string name="settings_show_broken_off">Es werden nur funktionierende Stationen angezeigt, nicht funktionierende werden unterdrückt.</string>
 
-    <string name="startup_action_title">Startverhalten</string>
+    <string name="settings_startup_behaviour">Startverhalten</string>
+
+    <string name="startup_action_title">Startverhalten der Anzeige</string>
     <string name="startup_show_all_stations">Starte mit der Listenansicht aller verfügbaren Stationen.</string>
-    <string name="startup_show_favorites">Starte mit Deiner Favoritenliste.</string>
-    <string name="startup_show_history">Starte mit der Liste Deiner bisher gespielten Stationen.</string>
+    <string name="startup_show_favorites">Starte mit der Favoritenliste.</string>
+    <string name="startup_show_history">Starte mit der Liste der bisher gespielten Stationen.</string>
     <string name="startup_show_last_view">Starte mit der letzten Ansicht.</string>
+
+    <string name="settings_auto_play_on_startup">Startverhalten des Abspielers</string>
+    <string name="settings_auto_play_on_startup_off">Die App startet still (die zuletzt gehörte Station wird nicht automatisch abgespielt).</string>
+    <string name="settings_auto_play_on_startup_on">Die zuletzt gehörte Station wird beim Start sofort abgespielt.</string>
+
 
     <string name="settings_load_icons">Stationslogos</string>
     <string name="settings_load_icons_on">Die Stationslogos werden im Hintergrund heruntergeladen; es kann einige Zeit dauern, bis alle Logos angezeigt werden.</string>
@@ -81,12 +92,12 @@
     <string name="settings_icon_click_toggles_favorite_off">Ein Klick auf das Stationslogo startet das Abspielen.</string>
 
     <string name="settings_alarm">Wecker</string>
-    <string name="settings_alarm_external">Öffne extern</string>
+    <string name="settings_alarm_external">Interner/externer Alarmspieler</string>
     <string name="settings_alarm_audio_player">Audio-Abspieler</string>
     <string name="settings_alarm_sleep_timer">Alarmdauer</string>
     <string name="settings_alarm_sleep_timer_desc">Nach %1$s Minuten stoppen</string>
     <string name="settings_play">Abspieler</string>
-    <string name="settings_play_external">Öffne extern</string>
+    <string name="settings_play_external">Interner/externer Abspieler</string>
 
     <string name="settings_statistics">Statistik</string>
     <string name="settings_about">Über RadioDroid</string>
@@ -165,13 +176,6 @@
 
     <string name="notify_stream_url_copied">Die Stream-Url wurde erfolgreich kopiert.</string>
 
-    <string-array name="actions_station_link">
-        <item>Zur Website gehen</item>
-        <item>Stream-Url ins Clipboard kopieren</item>
-    </string-array>
-
-    <string name="no_wifi_title">Keine WLAN-Verbindung</string>
-    <string name="no_wifi_connection">Es ist keine WLAN-Verbindung zum Starten von %1$s verfügbar.\n\nDrücken Sie \'OK\', um fortzufahren.</string>
     <string name="action_local">Lokal</string>
     <string name="action_resume">Fortsetzen</string>
     <string name="action_skip_to_next">Nächster</string>
@@ -186,8 +190,8 @@
     <string name="dialog_hint_file_name">Dateiname eingeben</string>
     <string name="error_empty_field">Dieses Feld wird benötigt</string>
     <string name="error_invalid_file_name">Ungültiger Dateiname</string>
-    <string name="error_stream_reconnect_timeout">Verbindung zum Stream kann nicht wiederhergestellt werden: Zeitüberschreitung</string>
-    <string name="giving_up_resume">Versuch, die Wiedergabe fortzusetzen, ignoriert</string>
+    <string name="error_stream_reconnect_timeout">Die Verbindung zum Stream konnte wegen Zeitüberschreitung nicht wiederhergestellt werden.</string>
+    <string name="giving_up_resume">Die Versuche zur Fortsetzung der Wiedergabe werden aufgegeben.</string>
     <string name="icon_click_trend_decreasing">Popularität abnehmend</string>
     <string name="icon_click_trend_increasing">Popularität steigt</string>
     <string name="icon_click_trend_stable">Beliebtheit stabil</string>
@@ -196,34 +200,40 @@
     <string name="image_button_record_request_permission">Berechtigungen für die Aufzeichnung anfordern</string>
     <string name="image_button_recordings">Aufnahmen</string>
     <string name="image_button_repeat">Wiederholen</string>
-    <string name="label_button_cancel">Stornieren</string>
+    <string name="label_button_cancel">Abbrechen</string>
     <string name="label_button_overwrite">Überschreiben</string>
     <string name="nav_item_about">Über</string>
     <string name="nav_item_statistics">Statistiken</string>
     <string name="notify_paused">Angehalten</string>
     <string name="notify_pre_play">Verbinde</string>
     <string name="refresh">Aktualisierung</string>
-    <string name="settings_alarm_external_desc_off">Öffnen Sie den Alarm mit RadioDroid</string>
-    <string name="settings_alarm_external_desc_on">Öffnen Sie den Alarm mit der externen Standard-App</string>
-    <string name="settings_auto_play_on_startup">Automatisches Abspielen</string>
-    <string name="settings_auto_play_on_startup_off">Spielen Sie nicht den letzten Sender beim Start</string>
-    <string name="settings_auto_play_on_startup_on">Letzten Sender beim Start abspielen</string>
+    <string name="settings_alarm_external_desc_off">Den Alarm mit RadioDroid abspielen.</string>
+    <string name="settings_alarm_external_desc_on">Den Alarm mit einer externen Standard-App abspielen.</string>
     <string name="settings_bottom_navigation">Navigation unten</string>
-    <string name="settings_click_trend_icon_visible">Klicken Sie auf das Trend-Symbol</string>
-    <string name="settings_click_trend_icon_visible_off">Das Symbol wird ausgeblendet</string>
-    <string name="settings_click_trend_icon_visible_on">Das Symbol wird angezeigt</string>
-    <string name="settings_compact_style_desc_off">Großes Symbol mit Stationsdetails übernommen</string>
-    <string name="settings_compact_style_desc_on">Kleines Symbol ohne Stationsdetails übernommen</string>
+    <string name="settings_click_trend_icon_visible">Trendsymbolanzeige</string>
+    <string name="settings_click_trend_icon_visible_off">Es werden keine Trendsymbole angezeigt.</string>
+    <string name="settings_click_trend_icon_visible_on">Es werden Trendsymbole angezeigt.</string>
+    <string name="settings_compact_style_desc_off">Es werden große Symbole mit den Stationsdetails angezeigt.</string>
+    <string name="settings_compact_style_desc_on">Es werden kleine Symbole ohne Stationsdetails angezeigt.</string>
     <string name="settings_connect_timeout">Verbindungszeitüberschreitung</string>
     <string name="settings_milliseconds_format">%d Millisekunden</string>
-    <string name="settings_play_external_desc_off">Spiele Sender mit RadioDroid</string>
-    <string name="settings_play_external_desc_on">Stationen mit externem Player abspielen</string>
+
+    <string name="settings_pause_when_noisy">Pause bei Kopfhörertrennung</string>
+
+    <string name="settings_auto_resume_on_wired_headset_connected">Kopfhörer/Kabelverbindung</string>
+    <string name="settings_auto_resume_on_wired_headset_connected_on">Die Wiedergabe wird bei Kopfhörer/Kabelwiederverbindung fortgesetzt.</string>
+    <string name="settings_auto_resume_do_not_resume">Die Wiedergabe wird bei Wiederanschluss des Abspielgeräts (Kopfhörer/Kabel/Bluetooth) nicht fortgesetzt.</string>
+
+    <string name="settings_auto_resume_on_bluetooth_a2dp_connected">Bluetoothverbindung</string>
+    <string name="settings_auto_resume_on_bluetooth_a2dp_connected_on">Die Wiedergabe wird bei Bluetoothwiederverbindung fortgesetzt.</string>
+
+    <string name="settings_play_external_desc_off">Stationen werden mit RadioDroid abgespielt.</string>
+    <string name="settings_play_external_desc_on">Stationen werden mit einem externem Player abspielt.</string>
     <string name="settings_proxy_action_test">Prüfung</string>
     <string name="settings_proxy_login">Nutzername</string>
-    <string name="settings_proxy_not_working">Verbindung zu %s konnte nicht hergestellt werden \n%s</string>
+    <string name="settings_proxy_not_working">Die Verbindung zu %s konnte nicht hergestellt werden \n%s.</string>
     <string name="settings_proxy_password">Passwort</string>
     <string name="settings_proxy_working">Erfolgreich verbunden mit %s</string>
-    <string name="settings_radiobrowser_servers">RadioBrowser-Server</string>
     <string name="settings_read_timeout">Zeitüberschreitung beim Lesen</string>
     <string name="settings_record_name_formatting">Namensformat</string>
     <string name="settings_resume_timeout">Zeitüberschreitung für Wiederverbindungsversuche nach Verbindungsverlust</string>

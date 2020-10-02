@@ -4,15 +4,17 @@ import android.content.Context;
 import android.media.AudioManager;
 import android.media.MediaPlayer;
 import android.os.Handler;
-import androidx.annotation.NonNull;
 import android.util.Log;
+
+import androidx.annotation.NonNull;
 
 import net.programmierecke.radiodroid2.BuildConfig;
 import net.programmierecke.radiodroid2.R;
-import net.programmierecke.radiodroid2.data.ShoutcastInfo;
-import net.programmierecke.radiodroid2.data.StreamLiveInfo;
+import net.programmierecke.radiodroid2.Utils;
+import net.programmierecke.radiodroid2.players.PlayState;
+import net.programmierecke.radiodroid2.station.live.ShoutcastInfo;
+import net.programmierecke.radiodroid2.station.live.StreamLiveInfo;
 import net.programmierecke.radiodroid2.players.PlayerWrapper;
-import net.programmierecke.radiodroid2.players.RadioPlayer;
 import net.programmierecke.radiodroid2.recording.RecordableListener;
 
 import java.io.IOException;
@@ -58,7 +60,7 @@ public class MediaPlayerWrapper implements PlayerWrapper, StreamProxyListener {
 
         Log.v(TAG, "Stream url:" + streamUrl);
 
-        isHls = streamUrl.endsWith(".m3u8");
+        isHls = Utils.urlIndicatesHlsStream(streamUrl);
 
         if (!isHls) {
             if (proxy != null) {
@@ -79,10 +81,13 @@ public class MediaPlayerWrapper implements PlayerWrapper, StreamProxyListener {
         if (mediaPlayer == null) {
             mediaPlayer = new MediaPlayer();
         }
+
         if (mediaPlayer.isPlaying()) {
             mediaPlayer.stop();
-            mediaPlayer.reset();
         }
+
+        mediaPlayer.reset();
+
         try {
             mediaPlayer.setAudioStreamType(isAlarm ? AudioManager.STREAM_ALARM : AudioManager.STREAM_MUSIC);
             mediaPlayer.setDataSource(proxyUrl);
@@ -93,10 +98,15 @@ public class MediaPlayerWrapper implements PlayerWrapper, StreamProxyListener {
                 public void onPrepared(MediaPlayer mp) {
                     playerIsInLegalState.set(true);
 
-                    stateListener.onStateChanged(RadioPlayer.PlayState.PrePlaying);
+                    stateListener.onStateChanged(PlayState.PrePlaying);
                     mediaPlayer.start();
-                    stateListener.onStateChanged(RadioPlayer.PlayState.Playing);
+                    stateListener.onStateChanged(PlayState.Playing);
                 }
+            });
+
+            mediaPlayer.setOnErrorListener((mp, what, extra) -> {
+                stateListener.onPlayerError(R.string.error_play_stream);
+                return true;
             });
         } catch (IllegalArgumentException e) {
             Log.e(TAG, "" + e);
@@ -117,7 +127,7 @@ public class MediaPlayerWrapper implements PlayerWrapper, StreamProxyListener {
                 mediaPlayer.stop();
                 mediaPlayer.reset();
 
-                stateListener.onStateChanged(RadioPlayer.PlayState.Paused);
+                stateListener.onStateChanged(PlayState.Paused);
             } else {
                 stop();
             }
@@ -141,13 +151,17 @@ public class MediaPlayerWrapper implements PlayerWrapper, StreamProxyListener {
             playerIsInLegalState.set(true);
         }
 
-        stateListener.onStateChanged(RadioPlayer.PlayState.Idle);
+        stateListener.onStateChanged(PlayState.Idle);
 
         stopProxy();
     }
 
     @Override
     public boolean isPlaying() {
+        if (mediaPlayer == null) {
+            return false;
+        }
+
         // If player is in illegal state it is either starting playback or stopping it so we treat
         // it as playing state.
         return !playerIsInLegalState.get() || (mediaPlayer != null && mediaPlayer.isPlaying());
@@ -174,6 +188,11 @@ public class MediaPlayerWrapper implements PlayerWrapper, StreamProxyListener {
     @Override
     public long getCurrentPlaybackTransferredBytes() {
         return currentPlaybackTransferredBytes;
+    }
+
+    @Override
+    public boolean isLocal() {
+        return true;
     }
 
     @Override
@@ -211,7 +230,7 @@ public class MediaPlayerWrapper implements PlayerWrapper, StreamProxyListener {
     }
 
     @Override
-    public Map<String, String> getNameFormattingArgs() {
+    public Map<String, String> getRecordNameFormattingArgs() {
         return null;
     }
 

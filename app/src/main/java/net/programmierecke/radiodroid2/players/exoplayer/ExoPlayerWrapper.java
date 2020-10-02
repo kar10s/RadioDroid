@@ -8,57 +8,56 @@ import android.content.IntentFilter;
 import android.content.SharedPreferences;
 import android.net.ConnectivityManager;
 import android.net.Uri;
-import androidx.annotation.NonNull;
-import androidx.annotation.Nullable;
-import androidx.preference.PreferenceManager;
+import android.os.Handler;
+import android.os.Looper;
 import android.util.Log;
 import android.view.Surface;
 
+import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
+import androidx.preference.PreferenceManager;
+
 import com.google.android.exoplayer2.C;
-import com.google.android.exoplayer2.DefaultLoadControl;
-import com.google.android.exoplayer2.DefaultRenderersFactory;
 import com.google.android.exoplayer2.ExoPlaybackException;
-import com.google.android.exoplayer2.ExoPlayerFactory;
 import com.google.android.exoplayer2.Format;
-import com.google.android.exoplayer2.LoadControl;
 import com.google.android.exoplayer2.PlaybackParameters;
 import com.google.android.exoplayer2.Player;
 import com.google.android.exoplayer2.SimpleExoPlayer;
 import com.google.android.exoplayer2.analytics.AnalyticsListener;
 import com.google.android.exoplayer2.audio.AudioAttributes;
 import com.google.android.exoplayer2.decoder.DecoderCounters;
-import com.google.android.exoplayer2.extractor.DefaultExtractorsFactory;
-import com.google.android.exoplayer2.extractor.ExtractorsFactory;
 import com.google.android.exoplayer2.metadata.Metadata;
-import com.google.android.exoplayer2.source.ExtractorMediaSource;
+import com.google.android.exoplayer2.metadata.MetadataOutput;
+import com.google.android.exoplayer2.metadata.icy.IcyHeaders;
+import com.google.android.exoplayer2.metadata.icy.IcyInfo;
+import com.google.android.exoplayer2.metadata.id3.Id3Frame;
 import com.google.android.exoplayer2.source.MediaSource;
 import com.google.android.exoplayer2.source.MediaSourceEventListener;
+import com.google.android.exoplayer2.source.ProgressiveMediaSource;
 import com.google.android.exoplayer2.source.TrackGroupArray;
 import com.google.android.exoplayer2.source.hls.HlsMediaSource;
-import com.google.android.exoplayer2.trackselection.AdaptiveTrackSelection;
-import com.google.android.exoplayer2.trackselection.DefaultTrackSelector;
-import com.google.android.exoplayer2.trackselection.TrackSelection;
 import com.google.android.exoplayer2.trackselection.TrackSelectionArray;
-import com.google.android.exoplayer2.trackselection.TrackSelector;
 import com.google.android.exoplayer2.upstream.DataSource;
 import com.google.android.exoplayer2.upstream.DefaultBandwidthMeter;
+import com.google.android.exoplayer2.upstream.DefaultLoadErrorHandlingPolicy;
+import com.google.android.exoplayer2.upstream.HttpDataSource;
 
+import net.programmierecke.radiodroid2.BuildConfig;
 import net.programmierecke.radiodroid2.R;
 import net.programmierecke.radiodroid2.Utils;
+import net.programmierecke.radiodroid2.players.PlayState;
 import net.programmierecke.radiodroid2.recording.RecordableListener;
-import net.programmierecke.radiodroid2.data.ShoutcastInfo;
-import net.programmierecke.radiodroid2.data.StreamLiveInfo;
+import net.programmierecke.radiodroid2.station.live.ShoutcastInfo;
+import net.programmierecke.radiodroid2.station.live.StreamLiveInfo;
 import net.programmierecke.radiodroid2.players.PlayerWrapper;
-import net.programmierecke.radiodroid2.players.RadioPlayer;
 
 import java.io.IOException;
+import java.util.HashMap;
 import java.util.Map;
-import java.util.Timer;
-import java.util.TimerTask;
 
 import okhttp3.OkHttpClient;
 
-public class ExoPlayerWrapper implements PlayerWrapper, IcyDataSource.IcyDataSourceListener {
+public class ExoPlayerWrapper implements PlayerWrapper, IcyDataSource.IcyDataSourceListener, MetadataOutput {
 
     final private String TAG = "ExoPlayerWrapper";
 
@@ -77,32 +76,81 @@ public class ExoPlayerWrapper implements PlayerWrapper, IcyDataSource.IcyDataSou
     private boolean isHls;
     private boolean isPlayingFlag;
 
-    Context context;
-    MediaSource audioSource;
+    private Handler playerThreadHandler;
 
-    boolean interruptedByConnectionLoss = false;
+    private Context context;
+    private MediaSource audioSource;
+
+    private Runnable fullStopTask;
 
     private final BroadcastReceiver networkChangedReceiver = new BroadcastReceiver() {
         @Override
         public void onReceive(Context context, Intent intent) {
-            SharedPreferences sharedPref = PreferenceManager.getDefaultSharedPreferences(context);
-            final boolean warn_no_wifi = sharedPref.getBoolean("warn_no_wifi", false);
-            if (interruptedByConnectionLoss && player != null && audioSource != null
-                    && (Utils.hasWifiConnection(context) || (!warn_no_wifi && Utils.hasAnyConnection(context)))) {
-                interruptedByConnectionLoss = false;
+            if (fullStopTask != null && player != null && audioSource != null && Utils.hasAnyConnection(context)) {
                 Log.i(TAG, "Regained connection. Resuming playback.");
+
+                cancelStopTask();
+
                 player.prepare(audioSource);
                 player.setPlayWhenReady(true);
             }
         }
     };
+    final class CustomLoadErrorHandlingPolicy extends DefaultLoadErrorHandlingPolicy {
+        final int MIN_RETRY_DELAY_MS = 10;
+        final SharedPreferences sharedPrefs = PreferenceManager.getDefaultSharedPreferences(context);
 
+        // We need to read the retry delay here on each error again because the user might change
+        // this value between retries and experiment with different vales to get the best result for
+        // the specific situation. We also need to make sure that a sensible minimum value is chosen.
+        int getSanitizedRetryDelaySettingsMs() {
+            return Math.max(sharedPrefs.getInt("settings_retry_delay", 100), MIN_RETRY_DELAY_MS);
+        }
+
+        @Override
+        public long getRetryDelayMsFor(
+                int dataType,
+                long loadDurationMs,
+                IOException exception,
+                int errorCount) {
+
+            int retryDelay = getSanitizedRetryDelaySettingsMs();
+
+            if (exception instanceof HttpDataSource.InvalidContentTypeException) {
+                stateListener.onPlayerError(R.string.error_play_stream);
+                return C.TIME_UNSET; // Immediately surface error if we cannot play content type
+            }
+
+            if (!Utils.hasAnyConnection(context)) {
+                int resumeWithinS = sharedPrefs.getInt("settings_resume_within", 60);
+                if (resumeWithinS > 0) {
+                    resumeWhenNetworkConnected();
+                    retryDelay = 1000 * resumeWithinS + retryDelay;
+                }
+            }
+
+            if (BuildConfig.DEBUG) {
+                Log.d(TAG, "Providing retry delay of " + retryDelay + "ms " +
+                        "for: data type " + dataType + ", " +
+                        "load duration: " + loadDurationMs + "ms, " +
+                        "error count: " + errorCount + ", " +
+                        "exception " + exception.getClass() + ", " +
+                        "message: " + exception.getMessage());
+            }
+            return retryDelay;
+        }
+
+        @Override
+        public int getMinimumLoadableRetryCount(int dataType) {
+            return sharedPrefs.getInt("settings_retry_timeout", 10) * 1000 / getSanitizedRetryDelaySettingsMs() + 1;
+        }
+    }
 
     @Override
     public void playRemote(@NonNull OkHttpClient httpClient, @NonNull String streamUrl, @NonNull Context context, boolean isAlarm) {
         // I don't know why, but it is still possible that streamUrl is null,
         // I still get exceptions from this from google
-        if (streamUrl == null){
+        if (streamUrl == null) {
             return;
         }
         if (!streamUrl.equals(this.streamUrl)) {
@@ -112,47 +160,50 @@ public class ExoPlayerWrapper implements PlayerWrapper, IcyDataSource.IcyDataSou
         this.context = context;
         this.streamUrl = streamUrl;
 
-        stateListener.onStateChanged(RadioPlayer.PlayState.PrePlaying);
+        cancelStopTask();
+
+        stateListener.onStateChanged(PlayState.PrePlaying);
 
         if (player != null) {
             player.stop();
         }
 
         if (player == null) {
-            TrackSelection.Factory videoTrackSelectionFactory = new AdaptiveTrackSelection.Factory();
-            TrackSelector trackSelector = new DefaultTrackSelector(videoTrackSelectionFactory);
-
-            LoadControl loadControl = new DefaultLoadControl.Builder().createDefaultLoadControl();
-            player = ExoPlayerFactory.newSimpleInstance(context, new DefaultRenderersFactory(context), trackSelector, loadControl);
+            player = new SimpleExoPlayer.Builder(context).build();
             player.setAudioAttributes(new AudioAttributes.Builder().setContentType(C.CONTENT_TYPE_MUSIC)
                     .setUsage(isAlarm ? C.USAGE_ALARM : C.USAGE_MEDIA).build());
 
             player.addListener(new ExoPlayerListener());
             player.addAnalyticsListener(new AnalyticEventListener());
+            player.addMetadataOutput(this);
         }
 
-        isHls = streamUrl.endsWith(".m3u8");
+        if (playerThreadHandler == null) {
+            playerThreadHandler = new Handler(Looper.getMainLooper());
+        }
+
+        isHls = Utils.urlIndicatesHlsStream(streamUrl);
 
         SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(context.getApplicationContext());
-        final int retryTimeout = prefs.getInt("settings_retry_timeout", 4);
-        final int retryDelay = prefs.getInt("settings_retry_delay", 10);
+        final int retryTimeout = prefs.getInt("settings_retry_timeout", 10);
+        final int retryDelay = prefs.getInt("settings_retry_delay", 100);
 
         DataSource.Factory dataSourceFactory = new RadioDataSourceFactory(httpClient, bandwidthMeter, this, retryTimeout, retryDelay);
         // Produces Extractor instances for parsing the media data.
-        ExtractorsFactory extractorsFactory = new DefaultExtractorsFactory();
-
         if (!isHls) {
-            audioSource = new ExtractorMediaSource.Factory(dataSourceFactory).setExtractorsFactory(extractorsFactory)
+            audioSource = new ProgressiveMediaSource.Factory(dataSourceFactory)
+                    .setLoadErrorHandlingPolicy(new CustomLoadErrorHandlingPolicy())
                     .createMediaSource(Uri.parse(streamUrl));
             player.prepare(audioSource);
         } else {
-            audioSource = new HlsMediaSource.Factory(dataSourceFactory).createMediaSource(Uri.parse(streamUrl));
+            audioSource = new HlsMediaSource.Factory(dataSourceFactory)
+                    .setLoadErrorHandlingPolicy(new CustomLoadErrorHandlingPolicy())
+                    .createMediaSource(Uri.parse(streamUrl));
             player.prepare(audioSource);
         }
 
         player.setPlayWhenReady(true);
 
-        interruptedByConnectionLoss = false;
         context.registerReceiver(networkChangedReceiver, new IntentFilter(ConnectivityManager.CONNECTIVITY_ACTION));
 
         // State changed will be called when audio session id is available.
@@ -161,6 +212,8 @@ public class ExoPlayerWrapper implements PlayerWrapper, IcyDataSource.IcyDataSou
     @Override
     public void pause() {
         Log.i(TAG, "Pause. Stopping exoplayer.");
+
+        cancelStopTask();
 
         if (player != null) {
             context.unregisterReceiver(networkChangedReceiver);
@@ -173,6 +226,8 @@ public class ExoPlayerWrapper implements PlayerWrapper, IcyDataSource.IcyDataSou
     @Override
     public void stop() {
         Log.i(TAG, "Stopping exoplayer.");
+
+        cancelStopTask();
 
         if (player != null) {
             context.unregisterReceiver(networkChangedReceiver);
@@ -217,6 +272,11 @@ public class ExoPlayerWrapper implements PlayerWrapper, IcyDataSource.IcyDataSou
     }
 
     @Override
+    public boolean isLocal() {
+        return true;
+    }
+
+    @Override
     public void setVolume(float newVolume) {
         if (player != null) {
             player.setVolume(newVolume);
@@ -239,31 +299,73 @@ public class ExoPlayerWrapper implements PlayerWrapper, IcyDataSource.IcyDataSou
     }
 
     @Override
-    public void onDataSourceConnectionLostIrrecoverably() {
-        Log.i(TAG, "Connection lost irrecoverably.");
-
-        stateListener.onStateChanged(RadioPlayer.PlayState.Idle);
-        stateListener.onPlayerError(R.string.error_stream_reconnect_timeout);
-
-        SharedPreferences sharedPref = PreferenceManager.getDefaultSharedPreferences(context);
-        int resumeWithin = sharedPref.getInt("settings_resume_within", 60);
-        if(resumeWithin > 0) {
-            Log.d(TAG, "Trying to resume playback within " + resumeWithin + "s.");
-            player.setPlayWhenReady(false);
-            interruptedByConnectionLoss = true;
-            new Timer().schedule(new TimerTask() {
-                @Override
-                public void run() {
-                    if (interruptedByConnectionLoss) {
-                        interruptedByConnectionLoss = false;
-                        stop();
-                        stateListener.onPlayerError(R.string.giving_up_resume);
+    public void onMetadata(Metadata metadata) {
+        if (BuildConfig.DEBUG) Log.d(TAG, "META: " + metadata.toString());
+        if ((metadata != null)) {
+            final int length = metadata.length();
+            if (length > 0) {
+                for (int i = 0; i < length; i++) {
+                    final Metadata.Entry entry = metadata.get(i);
+                    if (entry == null) {
+                        continue;
+                    }
+                    if (entry instanceof IcyInfo) {
+                        final IcyInfo icyInfo = ((IcyInfo) entry);
+                        Log.d(TAG, "IcyInfo: " + icyInfo.toString());
+                        if (icyInfo.title != null) {
+                            Map<String, String> rawMetadata = new HashMap<String, String>() {{
+                                put("StreamTitle", icyInfo.title);
+                            }};
+                            StreamLiveInfo streamLiveInfo = new StreamLiveInfo(rawMetadata);
+                            onDataSourceStreamLiveInfo(streamLiveInfo);
+                        }
+                    } else if (entry instanceof IcyHeaders) {
+                        final IcyHeaders icyHeaders = ((IcyHeaders) entry);
+                        Log.d(TAG, "IcyHeaders: " + icyHeaders.toString());
+                        onDataSourceShoutcastInfo(new ShoutcastInfo(icyHeaders));
+                    } else if (entry instanceof Id3Frame) {
+                        final Id3Frame id3Frame = ((Id3Frame) entry);
+                        Log.d(TAG, "id3 metadata: " + id3Frame.toString());
                     }
                 }
-            }, resumeWithin * 1000);
-        } else {
-            stop();
+            }
         }
+    }
+
+    @Override
+    public void onDataSourceConnectionLostIrrecoverably() {
+        Log.i(TAG, "Connection lost irrecoverably.");
+    }
+
+    void resumeWhenNetworkConnected() {
+        playerThreadHandler.post(() -> {
+            SharedPreferences sharedPref = PreferenceManager.getDefaultSharedPreferences(context);
+            int resumeWithin = sharedPref.getInt("settings_resume_within", 60);
+            if (resumeWithin > 0) {
+                Log.d(TAG, "Trying to resume playback within " + resumeWithin + "s.");
+
+                // We want user to be able to paused during connection loss.
+                // TODO: Find a way to notify user that even if current state is Playing
+                //       we are actually trying to reconnect.
+                //stateListener.onStateChanged(PlayState.Paused);
+
+                cancelStopTask();
+
+                fullStopTask = () -> {
+                    stop();
+                    stateListener.onPlayerError(R.string.giving_up_resume);
+
+                    ExoPlayerWrapper.this.fullStopTask = null;
+                };
+                playerThreadHandler.postDelayed(fullStopTask, resumeWithin * 1000);
+
+                stateListener.onPlayerWarning(R.string.warning_no_network_trying_resume);
+            } else {
+                stop();
+
+                stateListener.onPlayerError(R.string.error_stream_reconnect_timeout);
+            }
+        });
     }
 
     @Override
@@ -310,13 +412,20 @@ public class ExoPlayerWrapper implements PlayerWrapper, IcyDataSource.IcyDataSou
     }
 
     @Override
-    public Map<String, String> getNameFormattingArgs() {
+    public Map<String, String> getRecordNameFormattingArgs() {
         return null;
     }
 
     @Override
     public String getExtension() {
         return isHls ? "ts" : "mp3";
+    }
+
+    private void cancelStopTask() {
+        if (fullStopTask != null) {
+            playerThreadHandler.removeCallbacks(fullStopTask);
+            fullStopTask = null;
+        }
     }
 
     private class ExoPlayerListener implements Player.EventListener {
@@ -343,11 +452,10 @@ public class ExoPlayerWrapper implements PlayerWrapper, IcyDataSource.IcyDataSou
 
         @Override
         public void onPlayerError(ExoPlaybackException error) {
+            Log.d(TAG, "Player error: ", error);
             // Stop playing since it is either irrecoverable error in the player or our data source failed to reconnect.
-
-            if(!interruptedByConnectionLoss) {
+            if (fullStopTask != null || error.type != ExoPlaybackException.TYPE_SOURCE) {
                 stop();
-                stateListener.onStateChanged(RadioPlayer.PlayState.Idle);
                 stateListener.onPlayerError(R.string.error_play_stream);
             }
         }
@@ -366,7 +474,18 @@ public class ExoPlayerWrapper implements PlayerWrapper, IcyDataSource.IcyDataSou
     private class AnalyticEventListener implements AnalyticsListener {
         @Override
         public void onPlayerStateChanged(EventTime eventTime, boolean playWhenReady, int playbackState) {
-            isPlayingFlag = playWhenReady;
+            isPlayingFlag = playbackState == Player.STATE_READY || playbackState == Player.STATE_BUFFERING;
+
+            switch (playbackState) {
+                case Player.STATE_READY:
+                    cancelStopTask();
+                    stateListener.onStateChanged(PlayState.Playing);
+                    break;
+                case Player.STATE_BUFFERING:
+                    stateListener.onStateChanged(PlayState.PrePlaying);
+                    break;
+            }
+
         }
 
         @Override
@@ -411,7 +530,7 @@ public class ExoPlayerWrapper implements PlayerWrapper, IcyDataSource.IcyDataSou
 
         @Override
         public void onPlayerError(EventTime eventTime, ExoPlaybackException error) {
-
+            Log.d(TAG, "Player error at playback position " + eventTime.currentPlaybackPositionMs + "ms: ", error);
         }
 
         @Override
@@ -501,7 +620,7 @@ public class ExoPlayerWrapper implements PlayerWrapper, IcyDataSource.IcyDataSou
 
         @Override
         public void onAudioSessionId(EventTime eventTime, int audioSessionId) {
-            stateListener.onStateChanged(RadioPlayer.PlayState.Playing);
+
         }
 
         @Override
@@ -511,11 +630,6 @@ public class ExoPlayerWrapper implements PlayerWrapper, IcyDataSource.IcyDataSou
 
         @Override
         public void onVolumeChanged(EventTime eventTime, float volume) {
-
-        }
-
-        @Override
-        public void onAudioUnderrun(EventTime eventTime, int bufferSize, long bufferSizeMs, long elapsedSinceLastFeedMs) {
 
         }
 

@@ -2,28 +2,32 @@ package net.programmierecke.radiodroid2;
 
 import android.content.Context;
 import android.content.SharedPreferences;
+import android.graphics.drawable.Drawable;
 import android.os.Bundle;
-import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
-import androidx.preference.PreferenceManager;
-import androidx.recyclerview.widget.LinearLayoutManager;
-import androidx.recyclerview.widget.RecyclerView;
 import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 
+import androidx.preference.PreferenceManager;
+import androidx.recyclerview.widget.LinearLayoutManager;
+import androidx.recyclerview.widget.RecyclerView;
+import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
+
 import net.programmierecke.radiodroid2.adapters.ItemAdapterCategory;
 import net.programmierecke.radiodroid2.data.DataCategory;
+import net.programmierecke.radiodroid2.station.StationsFilter;
 
 import java.io.UnsupportedEncodingException;
 import java.net.URLEncoder;
 import java.util.ArrayList;
+import java.util.Collections;
 
 public class FragmentCategories extends FragmentBase {
     private static final String TAG = "FragmentCategories";
 
     private RecyclerView rvCategories;
-    private String baseSearchAddress = "";
+    private StationsFilter.SearchStyle searchStyle = StationsFilter.SearchStyle.ByName;
     private SwipeRefreshLayout swipeRefreshLayout;
     private boolean singleUseFilter = false;
     private SharedPreferences sharedPref;
@@ -31,20 +35,13 @@ public class FragmentCategories extends FragmentBase {
     public FragmentCategories() {
     }
 
-    public void SetBaseSearchLink(String url) {
-        this.baseSearchAddress = url;
+    public void SetBaseSearchLink(StationsFilter.SearchStyle searchStyle) {
+        this.searchStyle = searchStyle;
     }
 
     void ClickOnItem(DataCategory theData) {
         ActivityMain m = (ActivityMain) getActivity();
-
-        try {
-            String queryEncoded = URLEncoder.encode(theData.Name, "utf-8");
-            queryEncoded = queryEncoded.replace("+", "%20");
-            m.Search(RadioBrowserServerManager.getWebserviceEndpoint(m,baseSearchAddress + "/" + queryEncoded));
-        } catch (UnsupportedEncodingException e) {
-            e.printStackTrace();
-        }
+        m.Search(this.searchStyle, theData.Name);
     }
 
     @Override
@@ -66,13 +63,22 @@ public class FragmentCategories extends FragmentBase {
         DataCategory[] data = DataCategory.DecodeJson(getUrlResult());
 
         if (BuildConfig.DEBUG) Log.d(TAG, "categories count:" + data.length);
+        CountryCodeDictionary countryDict = CountryCodeDictionary.getInstance();
+        CountryFlagsLoader flagsDict = CountryFlagsLoader.getInstance();
 
         for (DataCategory aData : data) {
             if (!singleUseFilter || show_single_use_tags || (aData.UsedCount > 1)) {
+                if (searchStyle == StationsFilter.SearchStyle.ByCountryCodeExact){
+                    aData.Label = countryDict.getCountryByCode(aData.Name);
+                    aData.Icon = flagsDict.getFlag(requireContext(), aData.Name);
+                }
                 filteredCategoriesList.add(aData);
             }
         }
 
+        if (searchStyle == StationsFilter.SearchStyle.ByCountryCodeExact) {
+            Collections.sort(filteredCategoriesList);
+        }
         ItemAdapterCategory adapter = (ItemAdapterCategory) rvCategories.getAdapter();
         adapter.updateList(filteredCategoriesList);
     }

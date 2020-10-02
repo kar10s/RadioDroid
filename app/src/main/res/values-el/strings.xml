@@ -27,6 +27,8 @@
     <string name="action_tags">Καρτέλες</string>
     <string name="action_countries">Χώρες</string>
     <string name="action_languages">Γλώσσες</string>
+    <string name="action_station_visit_website">Επίσκεψη στον Ιστότοπο</string>
+    <string name="action_station_copy_stream_url">Αντιγραφή της Διεύθυνσης Url της Ροής</string>
     <string name="error_station_load">Αδυναμία σύνδεσης στο σταθμό</string>
     <string name="error_list_update">Αδυναμία σύνδεσης στον εξυπηρετητή πλοήγησης ραδιοφωνικών σταθμών</string>
 
@@ -37,7 +39,7 @@
     <string name="nav_item_history">Ιστορικό</string>
     <string name="nav_item_settings">Ρυθμίσεις</string>
     <string name="nav_item_alarm">Ξυπνητήρι</string>
-    <string name="nav_item_recordings">Ηχογραφήσεις</string>
+    <string name="tab_player_recordings">Ηχογραφήσεις</string>
 
     <string name="about_text">Αυτή η εφαρμογή χρησιμοποιεί τον ελεύθερο κατάλογο ραδιοφωνικών σταθμών, στο...\n
   https://www.radio-browser.info\n
@@ -68,7 +70,7 @@
     <string name="sleep_timer_title">Πόσα λεπτά πριν τη διακοπή;</string>
     <string name="sleep_timer_apply">Εφαρμογή</string>
     <string name="sleep_timer_clear">Καθάρισμα</string>
-    <string name="nav_item_add_sleep">+15 λεπτά</string>
+    <string name="nav_item_add_sleep">Χρονοδιακόπτης ύπνου</string>
 
     <string name="settings_theme_selection_title">Θέμα</string>
     <string name="theme_light">Φωτεινό</string>
@@ -200,8 +202,6 @@
     <string name="action_mpd_ok">Συνδέθηκε το MPD</string>
     <string name="action_mpd_connected">Συνδέθηκε στον εξυπηρετητή:  %1$s</string>
 
-    <!--<string name="settings_radiobrowser_servers">Εξυπηρετητές του RadioBrowser</string>-->
-
     <string name="settings_other">Άλλα</string>
     <string name="settings_statistics">Στατιστικά</string>
     <string name="settings_about">Σχετικά με το ΡάδιοΔροειδές</string>
@@ -218,15 +218,6 @@
 
     <string name="notify_stream_url_copied">Η Διεύθυνση Url της Ροής Έχει Αντιγραφεί με Επιτυχία!</string>
 
-    <string-array name="actions_station_link">
-        <item>Επίσκεψη στον Ιστότοπο</item>
-        <item>Αντιγραφή της Διεύθυνσης Url της Ροής</item>
-    </string-array>
-
-    <string name="no_wifi_title">Καμία σύνδεση Γουάι-Φάι (Τοπικό Δίκτυο)</string>
-    <string name="no_wifi_connection">Καμία σύνδεση Γουάι-Φάι (Τοπικό Δίκτυο) κατά την εκκίνηση του %1$s. \n
-    \n
-    Πίεσε το «Εντάξει» για να συνεχίσεις.</string>
     <string name="nav_item_statistics">Στατιστικά</string>
     <string name="nav_item_about">Σχετικά με...</string>
     <string name="settings_mpd_port">Θύρα MPD</string>

@@ -13,9 +13,9 @@ import android.util.Log;
 import android.widget.Toast;
 
 import androidx.annotation.Nullable;
+import androidx.localbroadcastmanager.content.LocalBroadcastManager;
 
-import net.programmierecke.radiodroid2.data.DataRadioStation;
-import net.programmierecke.radiodroid2.interfaces.IChanged;
+import net.programmierecke.radiodroid2.station.DataRadioStation;
 
 import org.json.JSONArray;
 
@@ -27,15 +27,21 @@ import java.io.FileWriter;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Observable;
 import java.util.Vector;
 
 import info.debatty.java.stringsimilarity.Cosine;
 import okhttp3.OkHttpClient;
 
-public class StationSaveManager {
+public class StationSaveManager extends Observable {
+    protected interface StationStatusListener {
+        void onStationStatusChanged(DataRadioStation station, boolean favourite);
+    }
+
     Context context;
     List<DataRadioStation> listStations = new ArrayList<DataRadioStation>();
-    private IChanged changedHandler;
+
+    protected StationStatusListener stationStatusListener;
 
     public StationSaveManager(Context ctx) {
         this.context = ctx;
@@ -46,17 +52,49 @@ public class StationSaveManager {
         return "default";
     }
 
+    protected void setStationStatusListener(StationStatusListener stationStatusListener) {
+        this.stationStatusListener = stationStatusListener;
+    }
+
     public void add(DataRadioStation station) {
         listStations.add(station);
         Save();
+
+        notifyObservers();
+
+        if (stationStatusListener != null) {
+            stationStatusListener.onStationStatusChanged(station, true);
+        }
     }
 
     public void addFront(DataRadioStation station) {
         listStations.add(0, station);
         Save();
+
+        notifyObservers();
+
+        if (stationStatusListener != null) {
+            stationStatusListener.onStationStatusChanged(station, true);
+        }
     }
 
-    DataRadioStation getById(String id) {
+    public DataRadioStation getLast() {
+        if (!listStations.isEmpty()) {
+            return listStations.get(listStations.size() - 1);
+        }
+
+        return null;
+    }
+
+    public DataRadioStation getFirst() {
+        if (!listStations.isEmpty()) {
+            return listStations.get(0);
+        }
+
+        return null;
+    }
+
+    public DataRadioStation getById(String id) {
         for (DataRadioStation station : listStations) {
             if (id.equals(station.StationUuid)) {
                 return station;
@@ -71,7 +109,7 @@ public class StationSaveManager {
 
         for (int i = 0; i < listStations.size() - 1; i++) {
             if (listStations.get(i).StationUuid.equals(id)) {
-                    return listStations.get(i + 1);
+                return listStations.get(i + 1);
             }
         }
         return listStations.get(0);
@@ -86,14 +124,20 @@ public class StationSaveManager {
                 return listStations.get(i - 1);
             }
         }
-        return listStations.get(listStations.size()-1);
+        return listStations.get(listStations.size() - 1);
     }
 
-    public void move(int fromPos, int toPos) {
+    public void moveWithoutNotify(int fromPos, int toPos) {
         Collections.rotate(listStations.subList(Math.min(fromPos, toPos), Math.max(fromPos, toPos) + 1), Integer.signum(fromPos - toPos));
     }
 
-    public @Nullable DataRadioStation getBestNameMatch(String query) {
+    public void move(int fromPos, int toPos) {
+        moveWithoutNotify(fromPos, toPos);
+        notifyObservers();
+    }
+
+    public @Nullable
+    DataRadioStation getBestNameMatch(String query) {
         DataRadioStation bestStation = null;
         query = query.toUpperCase();
         double smallesDistance = Double.MAX_VALUE;
@@ -112,9 +156,16 @@ public class StationSaveManager {
 
     public int remove(String id) {
         for (int i = 0; i < listStations.size(); i++) {
-            if (listStations.get(i).StationUuid.equals(id)) {
+            DataRadioStation station = listStations.get(i);
+            if (station.StationUuid.equals(id)) {
                 listStations.remove(i);
                 Save();
+                notifyObservers();
+
+                if (stationStatusListener != null) {
+                    stationStatusListener.onStationStatusChanged(station, false);
+                }
+
                 return i;
             }
         }
@@ -125,27 +176,47 @@ public class StationSaveManager {
     public void restore(DataRadioStation station, int pos) {
         listStations.add(pos, station);
         Save();
+
+        notifyObservers();
+
+        if (stationStatusListener != null) {
+            stationStatusListener.onStationStatusChanged(station, false);
+        }
     }
 
     public void clear() {
-        listStations.clear();
+        List<DataRadioStation> oldStation = listStations;
+        listStations = new ArrayList<>();
         Save();
+
+        notifyObservers();
+
+        if (stationStatusListener != null) {
+            for (DataRadioStation station : oldStation) {
+                stationStatusListener.onStationStatusChanged(station, false);
+            }
+        }
     }
 
-    public int size(){
+    @Override
+    public boolean hasChanged() {
+        return true;
+    }
+
+    public int size() {
         return listStations.size();
     }
 
-    public boolean isEmpty(){
+    public boolean isEmpty() {
         return listStations.size() == 0;
     }
 
-    public boolean has(String id){
+    public boolean has(String id) {
         DataRadioStation station = getById(id);
         return station != null;
     }
 
-    public boolean hasInvalidUuids() {
+    private boolean hasInvalidUuids() {
         for (DataRadioStation station : listStations) {
             if (!station.hasValidUuid()) {
                 return true;
@@ -159,36 +230,41 @@ public class StationSaveManager {
         return Collections.unmodifiableList(listStations);
     }
 
-    public void setChangedListener(IChanged handler){
-        this.changedHandler = handler;
-    }
-
-    void refreshStationsFromServer() {
+    private void refreshStationsFromServer() {
         final RadioDroidApp radioDroidApp = (RadioDroidApp) context.getApplicationContext();
         final OkHttpClient httpClient = radioDroidApp.getHttpClient();
-        context.sendBroadcast(new Intent(ActivityMain.ACTION_SHOW_LOADING));
+        LocalBroadcastManager.getInstance(context).sendBroadcast(new Intent(ActivityMain.ACTION_SHOW_LOADING));
 
-        new AsyncTask<Void, Void, Integer>() {
+        new AsyncTask<Void, Void, ArrayList<DataRadioStation>>() {
+            private ArrayList<DataRadioStation> savedStations;
+
             @Override
-            protected Integer doInBackground(Void... params) {
-                int deletedCount = 0;
-                for (DataRadioStation station : listStations) {
-                    if (!station.refresh(httpClient, context) && !station.hasValidUuid() && station.RefreshRetryCount > DataRadioStation.MAX_REFRESH_RETRIES) {
-                        listStations.remove(station);
-                        deletedCount++;
-                    }
-                }
-                return deletedCount;
+            protected void onPreExecute() {
+                savedStations = new ArrayList<>(listStations);
             }
 
             @Override
-            protected void onPostExecute(Integer result) {
-                Save();
-                if (changedHandler != null){
-                    changedHandler.onChanged();
+            protected ArrayList<DataRadioStation> doInBackground(Void... params) {
+                ArrayList<DataRadioStation> stationsToRemove = new ArrayList<>();
+                for (DataRadioStation station : savedStations) {
+                    if (!station.refresh(httpClient, context) && !station.hasValidUuid() && station.RefreshRetryCount > DataRadioStation.MAX_REFRESH_RETRIES) {
+                        stationsToRemove.add(station);
+                    }
                 }
-                context.sendBroadcast(new Intent(ActivityMain.ACTION_HIDE_LOADING));
-                super.onPostExecute(result);
+
+                return stationsToRemove;
+            }
+
+            @Override
+            protected void onPostExecute(ArrayList<DataRadioStation> stationsToRemove) {
+                listStations.removeAll(stationsToRemove);
+
+                Save();
+
+                notifyObservers();
+
+                LocalBroadcastManager.getInstance(context).sendBroadcast(new Intent(ActivityMain.ACTION_HIDE_LOADING));
+                super.onPostExecute(stationsToRemove);
             }
         }.execute();
     }
@@ -199,8 +275,8 @@ public class StationSaveManager {
         SharedPreferences sharedPref = PreferenceManager.getDefaultSharedPreferences(context);
         String str = sharedPref.getString(getSaveId(), null);
         if (str != null) {
-            DataRadioStation[] arr = DataRadioStation.DecodeJson(str);
-            Collections.addAll(listStations, arr);
+            List<DataRadioStation> arr = DataRadioStation.DecodeJson(str);
+            listStations.addAll(arr);
             if (hasInvalidUuids() && Utils.hasAnyConnection(context)) {
                 refreshStationsFromServer();
             }
@@ -236,8 +312,8 @@ public class StationSaveManager {
         return path;
     }
 
-    public void SaveM3U(final String filePath, final String fileName){
-        Toast toast = Toast.makeText(context, "Writing to " + filePath + "/" + fileName + ".. Please wait..", Toast.LENGTH_SHORT);
+    public void SaveM3U(final String filePath, final String fileName) {
+        Toast toast = Toast.makeText(context, context.getResources().getString(R.string.notify_save_playlist_now, filePath, fileName), Toast.LENGTH_LONG);
         toast.show();
 
         new AsyncTask<Void, Void, Boolean>() {
@@ -249,12 +325,12 @@ public class StationSaveManager {
             @Override
             protected void onPostExecute(Boolean result) {
                 if (result.booleanValue()) {
-                    Log.i("SAVE","OK");
-                    Toast toast = Toast.makeText(context, "Wrote " + filePath + "/" + fileName, Toast.LENGTH_SHORT);
+                    Log.i("SAVE", "OK");
+                    Toast toast = Toast.makeText(context, context.getResources().getString(R.string.notify_save_playlist_ok, filePath, fileName), Toast.LENGTH_LONG);
                     toast.show();
-                }else{
-                    Log.i("SAVE","NOK");
-                    Toast toast = Toast.makeText(context, "Write failed: " + filePath + "/" + fileName, Toast.LENGTH_SHORT);
+                } else {
+                    Log.i("SAVE", "NOK");
+                    Toast toast = Toast.makeText(context, context.getResources().getString(R.string.notify_save_playlist_nok, filePath, fileName), Toast.LENGTH_LONG);
                     toast.show();
                 }
                 super.onPostExecute(result);
@@ -262,8 +338,8 @@ public class StationSaveManager {
         }.execute();
     }
 
-    public void LoadM3U(final String filePath, final String fileName){
-        Toast toast = Toast.makeText(context, "Loading from " + filePath + "/" + fileName + ".. Please wait..", Toast.LENGTH_SHORT);
+    public void LoadM3U(final String filePath, final String fileName) {
+        Toast toast = Toast.makeText(context, context.getResources().getString(R.string.notify_load_playlist_now, filePath, fileName), Toast.LENGTH_LONG);
         toast.show();
 
         new AsyncTask<Void, Void, DataRadioStation[]>() {
@@ -274,21 +350,21 @@ public class StationSaveManager {
 
             @Override
             protected void onPostExecute(DataRadioStation[] result) {
-                if (result != null){
-                    Log.i("LOAD","Loaded " + result.length + "stations");
-                    for (DataRadioStation station: result){
+                if (result != null) {
+                    Log.i("LOAD", "Loaded " + result.length + "stations");
+                    for (DataRadioStation station : result) {
                         add(station);
                     }
-                    Toast toast = Toast.makeText(context, "Loaded " + result.length + " stations from " + filePath + "/" + fileName, Toast.LENGTH_SHORT);
+                    Toast toast = Toast.makeText(context, context.getResources().getString(R.string.notify_load_playlist_ok, result.length, filePath, fileName), Toast.LENGTH_LONG);
                     toast.show();
-                }else {
-                    Log.e("LOAD","Load failed");
-                    Toast toast = Toast.makeText(context, "Could not load from " + filePath + "/" + fileName, Toast.LENGTH_SHORT);
+                } else {
+                    Log.e("LOAD", "Load failed");
+                    Toast toast = Toast.makeText(context, context.getResources().getString(R.string.notify_load_playlist_nok, filePath, fileName), Toast.LENGTH_LONG);
                     toast.show();
                 }
-                if (changedHandler != null){
-                    changedHandler.onChanged();
-                }
+
+                notifyObservers();
+
                 super.onPostExecute(result);
             }
         }.execute();
@@ -296,7 +372,7 @@ public class StationSaveManager {
 
     protected final String M3U_PREFIX = "#RADIOBROWSERUUID:";
 
-    boolean SaveM3UInternal(String filePath, String fileName){
+    boolean SaveM3UInternal(String filePath, String fileName) {
         final RadioDroidApp radioDroidApp = (RadioDroidApp) context.getApplicationContext();
         final OkHttpClient httpClient = radioDroidApp.getHttpClient();
 
@@ -306,20 +382,20 @@ public class StationSaveManager {
             bw.write("#EXTM3U\n");
             for (DataRadioStation station : listStations) {
                 String result = null;
-                for (int i=0;i<20;i++){
+                for (int i = 0; i < 20; i++) {
                     result = Utils.getRealStationLink(httpClient, context, station.StationUuid);
-                    if (result != null){
+                    if (result != null) {
                         break;
                     }
                     try {
                         Thread.sleep(500);
                     } catch (InterruptedException e) {
-                        Log.e("ERR","Play() "+e);
+                        Log.e("ERR", "Play() " + e);
                     }
                 }
 
-                if (result != null){
-                    bw.write(M3U_PREFIX+station.StationUuid+"\n");
+                if (result != null) {
+                    bw.write(M3U_PREFIX + station.StationUuid + "\n");
                     bw.write("#EXTINF:-1," + station.Name + "\n");
                     bw.write(result + "\n\n");
                 }
@@ -329,20 +405,19 @@ public class StationSaveManager {
 
             if (Build.VERSION.SDK_INT < Build.VERSION_CODES.KITKAT) {
                 context.sendBroadcast(new Intent(Intent.ACTION_MEDIA_MOUNTED, Uri.parse("file://" + Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MUSIC))));
-            }else {
+            } else {
                 MediaScannerConnection
                         .scanFile(context, new String[]{f.getAbsolutePath()}, null, null);
             }
 
             return true;
-        }
-        catch (Exception e) {
+        } catch (Exception e) {
             Log.e("Exception", "File write failed: " + e.toString());
             return false;
         }
     }
 
-    DataRadioStation[] LoadM3UInternal(String filePath, String fileName){
+    DataRadioStation[] LoadM3UInternal(String filePath, String fileName) {
         Vector<DataRadioStation> loadedItems = new Vector<>();
         try {
             File f = new File(filePath, fileName);
@@ -354,22 +429,20 @@ public class StationSaveManager {
             final OkHttpClient httpClient = radioDroidApp.getHttpClient();
 
             while ((line = br.readLine()) != null) {
-                if (line.startsWith(M3U_PREFIX)){
+                if (line.startsWith(M3U_PREFIX)) {
                     try {
                         String uuid = line.substring(M3U_PREFIX.length()).trim();
                         DataRadioStation station = Utils.getStationByUuid(httpClient, context, uuid);
                         if (station != null) {
                             loadedItems.add(station);
                         }
-                    }
-                    catch(Exception e){
-                        Log.e("LOAD",e.toString());
+                    } catch (Exception e) {
+                        Log.e("LOAD", e.toString());
                     }
                 }
             }
             br.close();
-        }
-        catch (Exception e) {
+        } catch (Exception e) {
             Log.e("LOAD", "File write failed: " + e.toString());
             return null;
         }

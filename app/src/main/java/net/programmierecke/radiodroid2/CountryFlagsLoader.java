@@ -16,9 +16,7 @@ public class CountryFlagsLoader {
     private CountryFlagsLoader() {
     }
 
-    public Drawable getFlag(Context context, String countryName) {
-        String countryCode = CountryCodeDictionary.getInstance().getCodeByCountry(countryName.toLowerCase(Locale.ENGLISH));
-
+    public Drawable getFlag(Context context, String countryCode) {
         if (countryCode != null) {
             Resources resources = context.getResources();
             final String resourceName = "flag_" + countryCode.toLowerCase();

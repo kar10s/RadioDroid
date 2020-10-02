@@ -21,26 +21,27 @@ import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 
-import net.programmierecke.radiodroid2.adapters.ItemAdapterStation;
-import net.programmierecke.radiodroid2.adapters.ItemAdapterIconOnlyStation;
-import net.programmierecke.radiodroid2.data.DataRadioStation;
+import net.programmierecke.radiodroid2.station.ItemAdapterStation;
+import net.programmierecke.radiodroid2.station.DataRadioStation;
+import net.programmierecke.radiodroid2.station.ItemAdapterIconOnlyStation;
 import net.programmierecke.radiodroid2.interfaces.IAdapterRefreshable;
-import net.programmierecke.radiodroid2.interfaces.IChanged;
+import net.programmierecke.radiodroid2.station.StationActions;
+import net.programmierecke.radiodroid2.station.StationsFilter;
 
-public class FragmentStarred extends Fragment implements IAdapterRefreshable, IChanged {
+import java.util.Objects;
+import java.util.Observable;
+import java.util.Observer;
+
+public class FragmentStarred extends Fragment implements IAdapterRefreshable, Observer {
     private static final String TAG = "FragmentStarred";
 
     private RecyclerView rvStations;
 
     private FavouriteManager favouriteManager;
-    private HistoryManager historyManager;
 
     void onStationClick(DataRadioStation theStation) {
         RadioDroidApp radioDroidApp = (RadioDroidApp) getActivity().getApplication();
-
-        Utils.Play(radioDroidApp.getHttpClient(), theStation, getContext());
-
-        historyManager.add(theStation);
+        Utils.showPlaySelection(radioDroidApp, theStation, getActivity().getSupportFragmentManager());
     }
 
     public void RefreshListGui() {
@@ -57,10 +58,9 @@ public class FragmentStarred extends Fragment implements IAdapterRefreshable, IC
     public View onCreateView(LayoutInflater inflater, ViewGroup container,
                              Bundle savedInstanceState) {
 
-        RadioDroidApp radioDroidApp = (RadioDroidApp) getActivity().getApplication();
-        historyManager = radioDroidApp.getHistoryManager();
+        RadioDroidApp radioDroidApp = (RadioDroidApp) requireActivity().getApplication();
         favouriteManager = radioDroidApp.getFavouriteManager();
-        favouriteManager.setChangedListener(this);
+        favouriteManager.addObserver(this);
 
         // Inflate the layout for this fragment
         View view = inflater.inflate(R.layout.fragment_stations, container, false);
@@ -69,7 +69,7 @@ public class FragmentStarred extends Fragment implements IAdapterRefreshable, IC
         ItemAdapterStation adapter;
         SharedPreferences sharedPref = PreferenceManager.getDefaultSharedPreferences(getContext());
         if (sharedPref.getBoolean("load_icons", false) && sharedPref.getBoolean("icons_only_favorites_style", false)) {
-            adapter = new ItemAdapterIconOnlyStation(getActivity(), R.layout.list_item_icon_only_station);
+            adapter = new ItemAdapterIconOnlyStation(getActivity(), R.layout.list_item_icon_only_station, StationsFilter.FilterType.LOCAL);
             Context ctx = getContext();
             DisplayMetrics displayMetrics = ctx.getResources().getDisplayMetrics();
             int itemWidth = (int) ctx.getResources().getDimension(R.dimen.regular_style_icon_container_width);
@@ -79,7 +79,7 @@ public class FragmentStarred extends Fragment implements IAdapterRefreshable, IC
             rvStations.setLayoutManager(glm);
             ((ItemAdapterIconOnlyStation)adapter).enableItemMove(rvStations);
         } else {
-            adapter = new ItemAdapterStation(getActivity(), R.layout.list_item_station);
+            adapter = new ItemAdapterStation(getActivity(), R.layout.list_item_station, StationsFilter.FilterType.LOCAL);
             LinearLayoutManager llm = new LinearLayoutManager(getContext());
             llm.setOrientation(RecyclerView.VERTICAL);
 
@@ -93,38 +93,27 @@ public class FragmentStarred extends Fragment implements IAdapterRefreshable, IC
 
         adapter.setStationActionsListener(new ItemAdapterStation.StationActionsListener() {
             @Override
-            public void onStationClick(DataRadioStation station) {
+            public void onStationClick(DataRadioStation station, int pos) {
                 FragmentStarred.this.onStationClick(station);
             }
 
             @Override
             public void onStationSwiped(final DataRadioStation station) {
-                final int removedIdx = favouriteManager.remove(station.StationUuid);
-
-                RefreshListGui();
-
-                Snackbar snackbar = Snackbar
-                        .make(rvStations, R.string.notify_station_removed_from_list, Snackbar.LENGTH_LONG);
-                snackbar.setAction(R.string.action_station_removed_from_list_undo, new View.OnClickListener() {
-                    @Override
-                    public void onClick(View view) {
-                        favouriteManager.restore(station, removedIdx);
-                        RefreshListGui();
-                    }
-                });
-                snackbar.setActionTextColor(Color.GREEN);
-                snackbar.setDuration(BaseTransientBottomBar.LENGTH_LONG);
-                snackbar.show();
+                StationActions.removeFromFavourites(requireContext(), getView(), station);
             }
 
             @Override
             public void onStationMoved(int from, int to) {
-                favouriteManager.move(from, to);
+                favouriteManager.moveWithoutNotify(from, to);
             }
 
             @Override
             public void onStationMoveFinished() {
-                favouriteManager.Save();
+                // We don't want to update RecyclerView during its layout process
+                Objects.requireNonNull(getView()).post(() -> {
+                    favouriteManager.Save();
+                    favouriteManager.notifyObservers();
+                });
             }
         });
 
@@ -137,11 +126,16 @@ public class FragmentStarred extends Fragment implements IAdapterRefreshable, IC
     @Override
     public void onDestroyView() {
         super.onDestroyView();
+
         rvStations.setAdapter(null);
+
+        RadioDroidApp radioDroidApp = (RadioDroidApp) requireActivity().getApplication();
+        favouriteManager = radioDroidApp.getFavouriteManager();
+        favouriteManager.deleteObserver(this);
     }
 
     @Override
-    public void onChanged() {
+    public void update(Observable o, Object arg) {
         RefreshListGui();
     }
 }
